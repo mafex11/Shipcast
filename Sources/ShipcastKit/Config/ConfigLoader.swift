@@ -9,6 +9,8 @@ public struct ConfigLoader {
         do {
             let rawConfig = try decoder.decode(RawConfig.self, from: data)
             return try rawConfig.toShipcastConfig()
+        } catch let error as ShipcastError {
+            throw error
         } catch {
             throw ShipcastError.config(
                 "Failed to parse \(url.path)",
