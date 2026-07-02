@@ -44,6 +44,7 @@ describe('GET /u/[user]/[app]/appcast.xml', () => {
 
     expect(response.status).toBe(200)
     expect(response.headers.get('Content-Type')).toBe('application/rss+xml; charset=utf-8')
+    expect(response.headers.get('Cache-Control')).toBe('public, s-maxage=300, stale-while-revalidate=60')
 
     const xml = await response.text()
     expect(xml).toContain('<?xml version="1.0" encoding="utf-8"?>')
@@ -72,6 +73,23 @@ describe('GET /u/[user]/[app]/appcast.xml', () => {
 
   it.skip('continues serving XML even if FetchEvent logging fails', async () => {
     // TODO(verification-pass): Mock Prisma to throw error on fetchEvent.create
-    // Verify response is still 200 with valid XML
+    // Verify response is still 200 with valid XML (the insert runs in after(),
+    // post-response, so it cannot affect the served feed)
+  })
+
+  it.skip('serves only stable releases by default', async () => {
+    // TODO(verification-pass): Seed stable + beta releases; GET without
+    // ?channel and verify only stable versions appear in the XML
+  })
+
+  it.skip('serves the beta channel when ?channel=beta is passed', async () => {
+    // TODO(verification-pass): Seed stable + beta releases and verify only
+    // beta versions appear in the XML
+    const req = new Request('http://localhost:3000/u/testuser/test-app/appcast.xml?channel=beta')
+    const context = {
+      params: Promise.resolve({ user: 'testuser', app: 'test-app' }),
+    }
+    const response = await GET(req, context)
+    expect(response.status).toBe(200)
   })
 })
