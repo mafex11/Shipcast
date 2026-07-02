@@ -52,4 +52,28 @@ final class AppcastTests: XCTestCase {
         let parser = XMLParser(data: Data(xml.utf8))
         XCTAssertTrue(parser.parse(), "generated appcast must be well-formed XML")
     }
+
+    func testXMLEscapesSpecialCharacters() throws {
+        let specialEntries = [
+            AppcastEntry(
+                version: "1.0<beta>",
+                artifactURL: URL(string: "https://example.com/file?v=1&type=test")!,
+                edSignature: "sig\"with'quotes",
+                lengthBytes: 1000,
+                minSystemVersion: "14.0 & 15.0",
+                notesHTML: nil,
+                pubDate: date("2026-07-01T12:00:00Z")
+            ),
+        ]
+        let xml = AppcastGenerator(appName: "News & Weather").generate(releases: specialEntries)
+
+        XCTAssertTrue(xml.contains("News &amp; Weather"))
+        XCTAssertTrue(xml.contains("1.0&lt;beta&gt;"))
+        XCTAssertTrue(xml.contains("v=1&amp;type=test"))
+        XCTAssertTrue(xml.contains("sig&quot;with&apos;quotes"))
+        XCTAssertTrue(xml.contains("14.0 &amp; 15.0"))
+
+        let parser = XMLParser(data: Data(xml.utf8))
+        XCTAssertTrue(parser.parse(), "appcast with escaped special characters must be well-formed XML")
+    }
 }
