@@ -1,0 +1,16 @@
+[app]
+name = "MiniSwiftPM"
+bundle_id = "dev.shipcast.test.miniswiftpm"
+version = "1.0.0"
+project = "swiftpm"
+
+[sign]
+mode = "adhoc"
+
+[distribute]
+github_release = false
+formats = ["zip"]
+
+[updates]
+sparkle = false
+feed = "none"
