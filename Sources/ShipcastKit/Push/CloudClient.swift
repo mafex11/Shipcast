@@ -12,7 +12,16 @@ public struct CloudClient: Sendable {
     }
 
     public func push(release: AppcastEntry, token: String, baseURL: URL) throws {
-        var request = URLRequest(url: baseURL.appendingPathComponent("api/v1/apps/\(appSlug)/releases"))
+        guard !appSlug.isEmpty else {
+            throw ShipcastError.publish(
+                "App slug is empty — cannot build the release endpoint URL",
+                fix: "Check app.name in shipcast.toml contains at least one letter or digit"
+            )
+        }
+        // appendingPathComponent percent-encodes, so this never produces an invalid URL
+        let endpoint = baseURL.appendingPathComponent("api/v1/apps/\(appSlug)/releases")
+        var request = URLRequest(url: endpoint)
+        let endpointString = endpoint.absoluteString
         request.httpMethod = "POST"
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -43,7 +52,7 @@ public struct CloudClient: Sendable {
 
         if let transportError = outcome.transportError {
             throw ShipcastError.publish(
-                "POST \(request.url!.absoluteString) failed: \(transportError.localizedDescription)",
+                "POST \(endpointString) failed: \(transportError.localizedDescription)",
                 fix: "Check network connectivity and that \(baseURL.host ?? "the host") resolves: curl -I \(baseURL.absoluteString)"
             )
         }
@@ -52,17 +61,27 @@ public struct CloudClient: Sendable {
             return
         case 401, 403:
             throw ShipcastError.publish(
-                "POST \(request.url!.absoluteString) returned HTTP \(outcome.status): \(outcome.body)",
+                "POST \(endpointString) returned HTTP \(outcome.status): \(outcome.body)",
                 fix: "Your API token is invalid or missing. Get a fresh token from the Shipcast dashboard (Settings → API Tokens) and `export SHIPCAST_TOKEN=<token>` or pass --token"
+            )
+        case 404:
+            throw ShipcastError.publish(
+                "POST \(endpointString) returned HTTP 404: app \"\(appSlug)\" not found",
+                fix: "Create the app in the dashboard and check the slug matches"
             )
         case 409:
             throw ShipcastError.publish(
-                "POST \(request.url!.absoluteString) returned HTTP 409: version \(release.version) already published",
+                "POST \(endpointString) returned HTTP 409: version \(release.version) already published",
                 fix: "Bump the version (new git tag) and release again; published versions are immutable"
+            )
+        case 422:
+            throw ShipcastError.publish(
+                "POST \(endpointString) returned HTTP 422 (invalid payload): \(outcome.body)",
+                fix: "The release metadata failed server validation — check the response details; if the CLI and cloud versions differ, update shipcast"
             )
         default:
             throw ShipcastError.publish(
-                "POST \(request.url!.absoluteString) returned HTTP \(outcome.status): \(outcome.body)",
+                "POST \(endpointString) returned HTTP \(outcome.status): \(outcome.body)",
                 fix: "Retry; if it persists check https://shipcast.devmafex.com status or push later — the GitHub release and cask already succeeded"
             )
         }

@@ -58,18 +58,58 @@ final class CaskPublisherTests: XCTestCase {
         XCTAssertTrue(publisher.lastWrittenCaskURL!.path.hasSuffix("Casks/burnt.rb"))
     }
 
+    /// Shell wrapper that fails git invocations containing a specific subcommand
+    /// (git -C <tmpdir> add/commit/push — the tmpdir is random, so prefix stubs can't target these).
+    private final class FailingGitShell: ShellRunner {
+        let wrapped: MockShellRunner
+        let failingSubcommand: String
+
+        init(failingSubcommand: String) {
+            self.failingSubcommand = failingSubcommand
+            wrapped = MockShellRunner()
+            wrapped.stub(command: "gh", result: ShellResult(exitCode: 0, stdout: "mafex11\n", stderr: ""))
+            wrapped.stub(command: "git", result: ShellResult(exitCode: 0, stdout: "", stderr: ""))
+        }
+
+        func run(_ command: String, args: [String], env: [String: String]?) throws -> ShellResult {
+            if (command as NSString).lastPathComponent == "git", args.contains(failingSubcommand) {
+                return ShellResult(exitCode: 1, stdout: "", stderr: "remote: Permission denied")
+            }
+            return try wrapped.run(command, args: args, env: env)
+        }
+    }
+
     func testPushFailureThrowsPublishErrorWithFix() throws {
-        let shell = MockShellRunner()
-        shell.stub(command: "gh", result: ShellResult(exitCode: 0, stdout: "mafex11\n", stderr: ""))
-        // Stub git with -C prefix to match the push command which starts with git -C <dir> push ...
-        shell.stub(command: "git", args: ["-C"], result: ShellResult(exitCode: 1, stdout: "", stderr: "remote: Permission denied"))
-        shell.stub(command: "git", result: ShellResult(exitCode: 0, stdout: "", stderr: ""))
+        let shell = FailingGitShell(failingSubcommand: "push")
         XCTAssertThrowsError(try CaskPublisher(shell: shell).publish(cask: cask, config: makeConfig())) { error in
             guard case ShipcastError.publish(let message, let fix) = error else {
                 return XCTFail("expected .publish, got \(error)")
             }
             XCTAssertTrue(message.contains("git push"))
+            XCTAssertTrue(message.contains("Permission denied"))
             XCTAssertTrue(fix.contains("gh auth"))
+        }
+    }
+
+    func testAddFailureThrowsPublishErrorWithStderr() throws {
+        let shell = FailingGitShell(failingSubcommand: "add")
+        XCTAssertThrowsError(try CaskPublisher(shell: shell).publish(cask: cask, config: makeConfig())) { error in
+            guard case ShipcastError.publish(let message, _) = error else {
+                return XCTFail("expected .publish, got \(error)")
+            }
+            XCTAssertTrue(message.contains("git add"))
+            XCTAssertTrue(message.contains("Permission denied"))
+        }
+    }
+
+    func testCommitFailureThrowsPublishErrorWithStderr() throws {
+        let shell = FailingGitShell(failingSubcommand: "commit")
+        XCTAssertThrowsError(try CaskPublisher(shell: shell).publish(cask: cask, config: makeConfig())) { error in
+            guard case ShipcastError.publish(let message, let fix) = error else {
+                return XCTFail("expected .publish, got \(error)")
+            }
+            XCTAssertTrue(message.contains("git commit"))
+            XCTAssertTrue(fix.contains("git config"))
         }
     }
 

@@ -17,7 +17,7 @@ public final class CaskPublisher: @unchecked Sendable {
         }
         let tapOwner = String(tap.split(separator: "/")[0])
         let tapRepoName = String(tap.split(separator: "/")[1])
-        let token = config.app.name.lowercased()
+        let token = slugify(config.app.name)
         let version = config.app.version
 
         let whoami = try shell.run("gh", args: ["api", "user", "--jq", ".login"], env: nil)
@@ -59,9 +59,21 @@ public final class CaskPublisher: @unchecked Sendable {
         if !ownsTap {
             _ = try shell.run("git", args: ["-C", workDir.path, "checkout", "-b", branch], env: nil)
         }
-        _ = try shell.run("git", args: ["-C", workDir.path, "add", "Casks/\(token).rb"], env: nil)
+        let add = try shell.run("git", args: ["-C", workDir.path, "add", "Casks/\(token).rb"], env: nil)
+        guard add.exitCode == 0 else {
+            throw ShipcastError.publish(
+                "git add Casks/\(token).rb failed (exit \(add.exitCode)): \(add.stderr)",
+                fix: "Check the tap clone at \(workDir.path) is writable and retry `shipcast release`"
+            )
+        }
         let commitMessage = ownsTap ? "Update \(token) to \(version)" : "Add \(token) \(version)"
-        _ = try shell.run("git", args: ["-C", workDir.path, "commit", "-m", commitMessage], env: nil)
+        let commit = try shell.run("git", args: ["-C", workDir.path, "commit", "-m", commitMessage], env: nil)
+        guard commit.exitCode == 0 else {
+            throw ShipcastError.publish(
+                "git commit in tap clone failed (exit \(commit.exitCode)): \(commit.stderr)\(commit.stdout.isEmpty ? "" : "\n\(commit.stdout)")",
+                fix: "If the cask is unchanged the version may already be published; otherwise configure git identity (`git config --global user.email ...`) and retry"
+            )
+        }
 
         let push = try shell.run("git", args: ["-C", workDir.path, "push", "origin", branch], env: nil)
         guard push.exitCode == 0 else {

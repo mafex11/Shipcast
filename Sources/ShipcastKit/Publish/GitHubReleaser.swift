@@ -33,7 +33,6 @@ public struct GitHubReleaser: Sendable {
             )
         }
 
-        let zipName = artifacts.zipURL.lastPathComponent
-        return URL(string: "https://github.com/\(repo)/releases/download/\(tag)/\(zipName)")!
+        return try ReleasePipeline.predictedAssetURL(config: config, zipName: artifacts.zipURL.lastPathComponent)
     }
 }

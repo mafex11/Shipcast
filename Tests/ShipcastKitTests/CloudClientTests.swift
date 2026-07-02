@@ -106,4 +106,42 @@ final class CloudClientTests: XCTestCase {
             XCTAssertTrue(message.contains("409"))
         }
     }
+
+    func test404AppNotFoundThrowsPublishErrorWithDashboardFix() throws {
+        MockURLProtocol.handler = { request in
+            (HTTPURLResponse(url: request.url!, statusCode: 404, httpVersion: nil, headerFields: nil)!,
+             Data("{\"error\":\"App not found\"}".utf8))
+        }
+        let client = CloudClient(appSlug: "burnt", sha256: "abc123", session: session)
+        XCTAssertThrowsError(try client.push(release: entry, token: "sct_secret", baseURL: URL(string: "https://shipcast.devmafex.com")!)) { error in
+            guard case ShipcastError.publish(let message, let fix) = error else {
+                return XCTFail("expected .publish, got \(error)")
+            }
+            XCTAssertTrue(message.contains("404"))
+            XCTAssertTrue(fix.contains("Create the app in the dashboard"))
+        }
+    }
+
+    func test422InvalidPayloadThrowsPublishError() throws {
+        MockURLProtocol.handler = { request in
+            (HTTPURLResponse(url: request.url!, statusCode: 422, httpVersion: nil, headerFields: nil)!,
+             Data("{\"error\":\"Invalid request body\"}".utf8))
+        }
+        let client = CloudClient(appSlug: "burnt", sha256: "abc123", session: session)
+        XCTAssertThrowsError(try client.push(release: entry, token: "sct_secret", baseURL: URL(string: "https://shipcast.devmafex.com")!)) { error in
+            guard case ShipcastError.publish(let message, _) = error else {
+                return XCTFail("expected .publish, got \(error)")
+            }
+            XCTAssertTrue(message.contains("422"))
+        }
+    }
+
+    func testEmptySlugThrowsPublishError() {
+        let client = CloudClient(appSlug: "", sha256: "abc123", session: session)
+        XCTAssertThrowsError(try client.push(release: entry, token: "sct_secret", baseURL: URL(string: "https://shipcast.devmafex.com")!)) { error in
+            guard case ShipcastError.publish = error else {
+                return XCTFail("expected .publish, got \(error)")
+            }
+        }
+    }
 }
