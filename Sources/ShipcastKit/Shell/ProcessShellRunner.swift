@@ -22,10 +22,31 @@ public final class ProcessShellRunner: ShellRunner, @unchecked Sendable {
         process.standardError = stderrPipe
 
         try process.run()
-        process.waitUntilExit()
 
-        let stdoutData = stdoutPipe.fileHandleForReading.readDataToEndOfFile()
-        let stderrData = stderrPipe.fileHandleForReading.readDataToEndOfFile()
+        // Drain both pipes concurrently while the process runs. Reading only
+        // after waitUntilExit() deadlocks once a chatty command (e.g. xcodebuild)
+        // fills the 64KB pipe buffer and blocks on write.
+        let stdoutHandle = stdoutPipe.fileHandleForReading
+        let stderrHandle = stderrPipe.fileHandleForReading
+        var stdoutData = Data()
+        var stderrData = Data()
+        let group = DispatchGroup()
+        let lock = NSLock()
+        group.enter()
+        DispatchQueue.global().async {
+            let data = stdoutHandle.readDataToEndOfFile()
+            lock.lock(); stdoutData = data; lock.unlock()
+            group.leave()
+        }
+        group.enter()
+        DispatchQueue.global().async {
+            let data = stderrHandle.readDataToEndOfFile()
+            lock.lock(); stderrData = data; lock.unlock()
+            group.leave()
+        }
+
+        process.waitUntilExit()
+        group.wait()
 
         return ShellResult(
             exitCode: process.terminationStatus,
