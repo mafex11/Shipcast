@@ -1,0 +1,72 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id            String   @id @default(cuid())
+  githubId      Int      @unique
+  githubLogin   String
+  email         String?
+  apiToken      String   @unique @default(cuid())
+  createdAt     DateTime @default(now())
+  apps          App[]
+}
+
+model App {
+  id            String   @id @default(cuid())
+  slug          String
+  name          String
+  userId        String
+  user          User     @relation(fields: [userId], references: [id])
+  createdAt     DateTime @default(now())
+  releases      Release[]
+  fetchEvents   FetchEvent[]
+  fetchDailies  FetchDaily[]
+
+  @@unique([userId, slug])
+}
+
+model Release {
+  id                  String   @id @default(cuid())
+  appId               String
+  app                 App      @relation(fields: [appId], references: [id])
+  version             String
+  artifactUrl         String
+  sha256              String
+  edSignature         String
+  length              Int
+  minSystemVersion    String?
+  releaseNotesHtml    String?
+  channel             String   @default("stable")
+  publishedAt         DateTime @default(now())
+
+  @@unique([appId, version, channel])
+  @@index([appId, publishedAt])
+}
+
+model FetchEvent {
+  id          String   @id @default(cuid())
+  appId       String
+  app         App      @relation(fields: [appId], references: [id])
+  version     String?
+  timestamp   DateTime @default(now())
+  uaCoarse    String?
+
+  @@index([appId, timestamp])
+}
+
+model FetchDaily {
+  id          String   @id @default(cuid())
+  appId       String
+  app         App      @relation(fields: [appId], references: [id])
+  date        DateTime @db.Date
+  version     String
+  fetchCount  Int      @default(0)
+
+  @@unique([appId, date, version])
+  @@index([appId, date])
+}
