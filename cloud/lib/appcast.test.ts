@@ -38,7 +38,8 @@ describe('generateAppcastXML', () => {
     expect(xml).toContain('<pubDate>Mon, 15 Jan 2024 10:30:00 +0000</pubDate>')
     expect(xml).toContain('<enclosure url="https://example.com/app-1.0.0.zip" length="1024000" type="application/octet-stream" sparkle:edSignature="sig123" />')
     expect(xml).toContain('<sparkle:minimumSystemVersion>10.15</sparkle:minimumSystemVersion>')
-    expect(xml).toContain('<sparkle:releaseNotesLink>https://shipcast.dev/notes/rel_123</sparkle:releaseNotesLink>')
+    expect(xml).toContain('<description><![CDATA[<p>Initial release</p>]]></description>')
+    expect(xml).not.toContain('sparkle:releaseNotesLink')
     expect(xml).toContain('</item>')
   })
 
@@ -117,7 +118,7 @@ describe('generateAppcastXML', () => {
     expect(xml).not.toContain('sparkle:minimumSystemVersion')
   })
 
-  it('omits sparkle:releaseNotesLink when releaseNotesHtml is not set', () => {
+  it('omits description when releaseNotesHtml is not set', () => {
     const release: Release = {
       id: 'rel_123',
       appId: 'app_123',
@@ -134,7 +135,30 @@ describe('generateAppcastXML', () => {
 
     const xml = generateAppcastXML('TestApp', [release])
 
+    expect(xml).not.toContain('<description><![CDATA[')
     expect(xml).not.toContain('sparkle:releaseNotesLink')
+  })
+
+  it('guards a literal ]]> inside release notes by splitting the CDATA', () => {
+    const release: Release = {
+      id: 'rel_123',
+      appId: 'app_123',
+      version: '1.0.0',
+      artifactUrl: 'https://example.com/app-1.0.0.zip',
+      sha256: 'abc123',
+      edSignature: 'sig123',
+      length: 1024000,
+      minSystemVersion: null,
+      releaseNotesHtml: '<p>tricky ]]> content</p>',
+      channel: 'stable',
+      publishedAt: new Date('2024-01-15T10:30:00Z'),
+    }
+
+    const xml = generateAppcastXML('TestApp', [release])
+
+    expect(xml).toContain(
+      '<description><![CDATA[<p>tricky ]]]]><![CDATA[> content</p>]]></description>'
+    )
   })
 
   it('escapes XML special characters in app name and version', () => {
@@ -203,9 +227,9 @@ describe('generateAppcastXML', () => {
       <title>MyApp 2.0.0</title>
       <sparkle:version>2.0.0</sparkle:version>
       <pubDate>Thu, 01 Feb 2024 12:00:00 +0000</pubDate>
+      <description><![CDATA[<p>Major update</p>]]></description>
       <enclosure url="https://cdn.shipcast.dev/myapp/2.0.0.zip" length="2048000" type="application/octet-stream" sparkle:edSignature="newsig456" />
       <sparkle:minimumSystemVersion>11.0</sparkle:minimumSystemVersion>
-      <sparkle:releaseNotesLink>https://shipcast.dev/notes/rel_new</sparkle:releaseNotesLink>
     </item>
     <item>
       <title>MyApp 1.0.0</title>

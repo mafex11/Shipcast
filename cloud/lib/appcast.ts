@@ -13,6 +13,14 @@ function escapeXML(str: string): string {
 }
 
 /**
+ * Wraps HTML in a CDATA section. A literal "]]>" inside the content would
+ * terminate the CDATA early, so split it across two CDATA sections.
+ */
+function toCDATA(html: string): string {
+  return `<![CDATA[${html.replaceAll(']]>', ']]]]><![CDATA[>')}]]>`
+}
+
+/**
  * Formats a Date object to RFC 2822 format (required for RSS pubDate).
  */
 function toRFC2822(date: Date): string {
@@ -52,20 +60,18 @@ export function generateAppcastXML(appName: string, releases: Release[]): string
     let itemContent = `    <item>
       <title>${title}</title>
       <sparkle:version>${escapeXML(release.version)}</sparkle:version>
-      <pubDate>${pubDate}</pubDate>
-      <enclosure url="${escapeXML(release.artifactUrl)}" length="${release.length}" type="application/octet-stream" sparkle:edSignature="${escapeXML(release.edSignature)}" />`
+      <pubDate>${pubDate}</pubDate>`
+
+    if (release.releaseNotesHtml) {
+      // Inline release notes as CDATA, matching the Swift AppcastGenerator.
+      // (A releaseNotesLink would need a hosted notes page, which doesn't exist.)
+      itemContent += `\n      <description>${toCDATA(release.releaseNotesHtml)}</description>`
+    }
+
+    itemContent += `\n      <enclosure url="${escapeXML(release.artifactUrl)}" length="${release.length}" type="application/octet-stream" sparkle:edSignature="${escapeXML(release.edSignature)}" />`
 
     if (release.minSystemVersion) {
       itemContent += `\n      <sparkle:minimumSystemVersion>${escapeXML(release.minSystemVersion)}</sparkle:minimumSystemVersion>`
-    }
-
-    if (release.releaseNotesHtml) {
-      // Generate release notes URL - we'll use the same pattern as the appcast URL
-      // The brief mentions "releaseNotesLink ONLY when notes exist"
-      // In a real scenario, this would point to a dedicated notes endpoint
-      // For now, we'll create a placeholder that follows the URL structure
-      const notesUrl = `https://shipcast.dev/notes/${release.id}`
-      itemContent += `\n      <sparkle:releaseNotesLink>${escapeXML(notesUrl)}</sparkle:releaseNotesLink>`
     }
 
     itemContent += '\n    </item>'
