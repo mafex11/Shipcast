@@ -58,6 +58,21 @@ public struct SwiftPMBuilder {
         // Generate Info.plist
         _ = try InfoPlistGenerator.generate(for: artifact, config: config)
 
+        // Generate icon if present
+        let iconPNG = projectRoot.appendingPathComponent("icon.png")
+        if fm.fileExists(atPath: iconPNG.path) {
+            let icnsPath = resourcesURL.appendingPathComponent("AppIcon.icns")
+            try IconGenerator.generateICNS(from: iconPNG, to: icnsPath, shell: shell)
+
+            // Update Info.plist to reference icon
+            let plistURL = contentsURL.appendingPathComponent("Info.plist")
+            let plistData = try Data(contentsOf: plistURL)
+            var plist = try PropertyListSerialization.propertyList(from: plistData, options: [], format: nil) as! [String: Any]
+            plist["CFBundleIconFile"] = "AppIcon"
+            let updatedData = try PropertyListSerialization.data(fromPropertyList: plist, format: .xml, options: 0)
+            try updatedData.write(to: plistURL)
+        }
+
         return artifact
     }
 }
