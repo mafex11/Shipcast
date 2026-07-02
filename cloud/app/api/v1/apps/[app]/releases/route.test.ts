@@ -83,16 +83,23 @@ describe('POST /api/v1/apps/[app]/releases', () => {
     expect(json.error).toContain('App not found')
   })
 
-  it.skip('returns 403 when user does not own the app', async () => {
+  it.skip('returns 404 when the app exists but belongs to another user', async () => {
     // TODO(verification-pass): Create a second user and app owned by that user
-    // Then attempt to publish a release with the first user's token
-    // Verify 403 response
+    // Then attempt to publish a release with the first user's token.
+    // The app lookup is scoped to the authenticated user (slug is only unique
+    // per user), so this reads as "no such app for this user" → 404, not 403.
   })
 
   it.skip('returns 409 when release with same version and channel already exists', async () => {
     // TODO(verification-pass): Create a release with version 1.0.0 on stable channel
     // Then attempt to create another release with same version and channel
     // Verify 409 response with existing release details
+  })
+
+  it.skip('returns 409 when a concurrent create loses the unique-constraint race (P2002)', async () => {
+    // TODO(verification-pass): Mock prisma.release.create to throw
+    // PrismaClientKnownRequestError with code 'P2002' (findFirst returned null).
+    // Verify 409 response instead of 500.
   })
 
   it.skip('returns 422 when request body is invalid JSON', async () => {

@@ -50,9 +50,11 @@ export async function POST(req: Request, context: RouteContext) {
     )
   }
 
-  // 3. Query App by slug
+  // 3. Query App by slug scoped to the authenticated user. Slugs are only
+  // unique per user (@@unique([userId, slug])), so an unscoped findFirst could
+  // pick up another user's app with the same slug and wrongly 403.
   const app = await prisma.app.findFirst({
-    where: { slug: appSlug },
+    where: { slug: appSlug, userId: user.id },
   })
 
   if (!app) {
@@ -62,15 +64,7 @@ export async function POST(req: Request, context: RouteContext) {
     )
   }
 
-  // 4. Verify ownership
-  if (app.userId !== user.id) {
-    return NextResponse.json(
-      { error: 'You do not have permission to publish releases for this app' },
-      { status: 403 }
-    )
-  }
-
-  // 5. Parse and validate request body
+  // 4. Parse and validate request body
   let body: unknown
   try {
     body = await req.json()
@@ -94,7 +88,7 @@ export async function POST(req: Request, context: RouteContext) {
 
   const data = parseResult.data
 
-  // 6. Check unique constraint (appId, version, channel)
+  // 5. Check unique constraint (appId, version, channel)
   const existingRelease = await prisma.release.findFirst({
     where: {
       appId: app.id,
@@ -117,7 +111,7 @@ export async function POST(req: Request, context: RouteContext) {
     )
   }
 
-  // 7. Create Release
+  // 6. Create Release
   try {
     const release = await prisma.release.create({
       data: {
@@ -133,12 +127,30 @@ export async function POST(req: Request, context: RouteContext) {
       },
     })
 
-    // 8. Return 201 with id
+    // 7. Return 201 with id
     return NextResponse.json(
       { id: release.id },
       { status: 201 }
     )
   } catch (error) {
+    // Two concurrent POSTs can both pass the findFirst check above; the DB
+    // unique constraint (appId, version, channel) then rejects the loser with
+    // P2002 — surface that as the same 409 the pre-check would have returned.
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === 'P2002'
+    ) {
+      return NextResponse.json(
+        {
+          error: 'A release with this version and channel already exists',
+          existing: {
+            version: data.version,
+            channel: data.channel,
+          },
+        },
+        { status: 409 }
+      )
+    }
     console.error('Failed to create release:', error)
     return NextResponse.json(
       { error: 'Failed to create release' },
