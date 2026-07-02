@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+  <channel>
+    <title>Burnt Updates</title>
+    <description>Release feed for Burnt</description>
+    <language>en</language>
+    <item>
+      <title>Version 1.2.0</title>
+      <sparkle:version>1.2.0</sparkle:version>
+      <pubDate>Wed, 01 Jul 2026 12:00:00 +0000</pubDate>
+      <description><![CDATA[<p>Fixed bugs</p>]]></description>
+      <enclosure url="https://github.com/mafex11/burnt/releases/download/v1.2.0/Burnt.zip"
+                 length="12345678"
+                 type="application/octet-stream"
+                 sparkle:edSignature="MEUCIQDtest+sig==" />
+      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+    </item>
+    <item>
+      <title>Version 1.1.0</title>
+      <sparkle:version>1.1.0</sparkle:version>
+      <pubDate>Mon, 01 Jun 2026 12:00:00 +0000</pubDate>
+      <enclosure url="https://github.com/mafex11/burnt/releases/download/v1.1.0/Burnt.zip"
+                 length="12000000"
+                 type="application/octet-stream"
+                 sparkle:edSignature="OLDSIG==" />
+    </item>
+  </channel>
+</rss>
