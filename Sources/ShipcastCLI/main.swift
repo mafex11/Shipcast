@@ -5,7 +5,7 @@ struct Shipcast: ParsableCommand {
         commandName: "shipcast",
         abstract: "Mac app distribution pipeline",
         version: "0.1.0",
-        subcommands: [Init.self, Build.self, Sign.self, PackageCommand.self, DoctorCommand.self]
+        subcommands: [Init.self, Build.self, Sign.self, PackageCommand.self, DoctorCommand.self, ReleaseCommand.self, PushCommand.self]
     )
 }
 
