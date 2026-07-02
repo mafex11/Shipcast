@@ -13,8 +13,9 @@ struct PackageCommand: ParsableCommand {
         let tomlURL = cwd.appendingPathComponent("shipcast.toml")
 
         do {
-            let config = try ConfigLoader.load(from: tomlURL)
             let shell = ProcessShellRunner()
+            var config = try ConfigLoader.load(from: tomlURL)
+            config = try VersionResolver.resolve(config: config, at: cwd, shell: shell)
 
             let appURL = cwd
                 .appendingPathComponent(".build/release")

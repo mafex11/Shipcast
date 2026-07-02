@@ -22,8 +22,9 @@ struct Build: ParsableCommand {
         }
 
         do {
-            let config = try ConfigLoader.load(from: tomlURL)
             let shell = ProcessShellRunner()
+            var config = try ConfigLoader.load(from: tomlURL)
+            config = try VersionResolver.resolve(config: config, at: cwd, shell: shell)
 
             print("Building \(config.app.name)...")
 
