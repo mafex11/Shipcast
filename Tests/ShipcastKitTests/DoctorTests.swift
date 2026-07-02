@@ -114,6 +114,7 @@ final class DoctorTests: XCTestCase {
         let findings = Doctor(shell: ProcessShellRunner()).run(appURL: app, config: makeConfig())
         XCTAssertEqual(finding(findings, "App bundle structure")?.status, .pass)
         XCTAssertEqual(finding(findings, "Code signature")?.status, .pass)
+        XCTAssertEqual(finding(findings, "Gatekeeper assessment")?.status, .warn)
         XCTAssertEqual(finding(findings, "Quarantine")?.status, .pass)
         XCTAssertEqual(finding(findings, "Notarization")?.status, .pass) // "No notarization required (ad-hoc signed)"
     }
@@ -136,5 +137,17 @@ final class DoctorTests: XCTestCase {
         let f = try XCTUnwrap(finding(findings, "Sparkle SUFeedURL"))
         XCTAssertEqual(f.status, .fail)
         XCTAssertTrue(f.fix!.contains("SUFeedURL"))
+    }
+
+    func testSparkleMissingPublicKeyFails() throws {
+        let app = try makeBundle(name: "DoctorFixture", bundleID: "dev.mafex.doctorfixture",
+                                 extraPlist: ["SUFeedURL": "https://example.com/appcast.xml"])
+        try adhocSign(app)
+        let findings = Doctor(shell: ProcessShellRunner()).run(appURL: app, config: makeConfig(sparkle: true))
+        let f = try XCTUnwrap(finding(findings, "Sparkle SUPublicEDKey"))
+        XCTAssertEqual(f.status, .fail)
+        XCTAssertTrue(f.fix!.contains("SUPublicEDKey"))
+        // Verify feed reachability doesn't run when pubkey is missing
+        XCTAssertNil(finding(findings, "Sparkle feed reachable"))
     }
 }

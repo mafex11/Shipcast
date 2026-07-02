@@ -170,7 +170,10 @@ public struct Doctor: Sendable {
             semaphore.signal()
         }
         task.resume()
-        _ = semaphore.wait(timeout: .now() + 10)
+        let waitResult = semaphore.wait(timeout: .now() + 10)
+        if waitResult == .timedOut {
+            task.cancel()
+        }
 
         guard fetched.status == 200, let xmlData = fetched.data else {
             findings.append(DoctorFinding(check: "Sparkle feed reachable", status: .fail,
@@ -203,11 +206,15 @@ public struct Doctor: Sendable {
         }
         let semaphore = DispatchSemaphore(value: 0)
         var artifactData: Data?
-        URLSession.shared.dataTask(with: enclosure.url) { data, _, _ in
+        let task = URLSession.shared.dataTask(with: enclosure.url) { data, _, _ in
             artifactData = data
             semaphore.signal()
-        }.resume()
-        _ = semaphore.wait(timeout: .now() + 60)
+        }
+        task.resume()
+        let waitResult = semaphore.wait(timeout: .now() + 60)
+        if waitResult == .timedOut {
+            task.cancel()
+        }
         guard let artifact = artifactData else {
             return DoctorFinding(check: "Ed25519 signature", status: .warn,
                                  reason: "could not download enclosure to verify signature",
@@ -229,7 +236,8 @@ final class AppcastParser: NSObject, XMLParserDelegate {
     func parseLatestEnclosure(data: Data) -> (url: URL, edSignature: String)? {
         let parser = XMLParser(data: data)
         parser.delegate = self
-        guard parser.parse() || result != nil else { return nil }
+        // Note: abortParsing() is called after first enclosure is found, making parse() return false even on success
+        _ = parser.parse()
         return result
     }
 
