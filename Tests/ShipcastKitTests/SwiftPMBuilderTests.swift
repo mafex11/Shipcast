@@ -20,7 +20,6 @@ final class SwiftPMBuilderTests: XCTestCase {
         // Verify .app structure
         let contentsURL = artifact.appURL.appendingPathComponent("Contents")
         XCTAssertTrue(FileManager.default.fileExists(atPath: contentsURL.appendingPathComponent("MacOS/MiniSwiftPM").path))
-        // Task 7 uncomments this
-        // XCTAssertTrue(FileManager.default.fileExists(atPath: contentsURL.appendingPathComponent("Info.plist").path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: contentsURL.appendingPathComponent("Info.plist").path))
     }
 }

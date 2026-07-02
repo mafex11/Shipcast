@@ -47,11 +47,17 @@ public struct SwiftPMBuilder {
             throw ShipcastError.generic("Failed to make binary executable", fix: "Check file permissions")
         }
 
-        return BuildArtifact(
+        // Create BuildArtifact
+        let artifact = BuildArtifact(
             appURL: appURL,
             appName: appName,
             bundleID: config.app.bundleID,
             version: config.app.version
         )
+
+        // Generate Info.plist
+        _ = try InfoPlistGenerator.generate(for: artifact, config: config)
+
+        return artifact
     }
 }
