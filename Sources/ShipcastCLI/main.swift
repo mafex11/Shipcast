@@ -1,14 +1,12 @@
 import ArgumentParser
 
-@main
 struct Shipcast: ParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "shipcast",
         abstract: "Mac app distribution pipeline",
-        version: "0.1.0"
+        version: "0.1.0",
+        subcommands: [Init.self, Build.self, Sign.self, PackageCommand.self]
     )
-
-    mutating func run() throws {
-        print("Shipcast v0.1.0")
-    }
 }
+
+Shipcast.main()
