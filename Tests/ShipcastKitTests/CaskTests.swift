@@ -57,4 +57,53 @@ final class CaskTests: XCTestCase {
         let cask = CaskGenerator().generate(config: config, artifacts: artifacts, releaseURL: releaseURL)
         XCTAssertTrue(cask.contains(#"args: ["reset", "SystemPolicyAllFiles", "dev.mafex.burnt"]"#))
     }
+
+    func testAutoModeResolvedToDeveloperIDHasNoPostflight() throws {
+        // mode = "auto" in the config, but signing resolved to Developer ID + notarized:
+        // the cask must NOT strip quarantine or reset TCC (that would wipe grants each update)
+        let config = makeConfig(mode: .auto, permissions: [.accessibility, .screenRecording])
+        let cask = CaskGenerator().generate(
+            config: config, artifacts: artifacts, releaseURL: releaseURL, resolvedMode: .developerID)
+        XCTAssertFalse(cask.contains("postflight"))
+        XCTAssertFalse(cask.contains("com.apple.quarantine"))
+        XCTAssertFalse(cask.contains("tccutil"))
+        XCTAssertEqual(cask, try golden("burnt-notarized.rb"))
+    }
+
+    func testAutoModeResolvedToAdhocKeepsPostflight() throws {
+        let config = makeConfig(mode: .auto, permissions: [.accessibility, .screenRecording])
+        let cask = CaskGenerator().generate(
+            config: config, artifacts: artifacts, releaseURL: releaseURL, resolvedMode: .adhoc)
+        XCTAssertEqual(cask, try golden("burnt-adhoc.rb"))
+    }
+
+    func testCaskTokenUsesSlugifiedName() throws {
+        var config = makeConfig(mode: .adhoc, permissions: [])
+        config.app.name = "My App"
+        let cask = CaskGenerator().generate(config: config, artifacts: artifacts, releaseURL: releaseURL)
+        XCTAssertTrue(cask.hasPrefix("cask \"my-app\" do"))
+    }
+}
+
+final class SlugifyTests: XCTestCase {
+    func testLowercasesAndHyphenatesWhitespace() {
+        XCTAssertEqual(slugify("My App"), "my-app")
+        XCTAssertEqual(slugify("My   Cool App"), "my-cool-app")
+    }
+
+    func testStripsUnsafeCharacters() {
+        XCTAssertEqual(slugify("Burnt!"), "burnt")
+        XCTAssertEqual(slugify("Café App"), "caf-app")
+        XCTAssertEqual(slugify("app_2.0"), "app20")
+    }
+
+    func testTrimsLeadingAndTrailingHyphens() {
+        XCTAssertEqual(slugify("  My App  "), "my-app")
+        XCTAssertEqual(slugify("-weird-"), "weird")
+    }
+
+    func testSimpleNameUnchanged() {
+        XCTAssertEqual(slugify("burnt"), "burnt")
+        XCTAssertEqual(slugify("Burnt"), "burnt")
+    }
 }

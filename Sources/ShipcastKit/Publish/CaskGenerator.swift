@@ -3,8 +3,15 @@ import Foundation
 public struct CaskGenerator: Sendable {
     public init() {}
 
-    public func generate(config: ShipcastConfig, artifacts: PackagedArtifacts, releaseURL: URL) -> String {
-        let token = config.app.name.lowercased()
+    /// - Parameter resolvedMode: the signing mode actually used (from
+    ///   SignedArtifact.resolvedMode). With mode = "auto" the configured mode says
+    ///   nothing about whether the app was notarized; branching the postflight on
+    ///   the configured mode would wipe TCC grants for notarized apps on every
+    ///   update. Defaults to the configured mode for call sites without a
+    ///   SignedArtifact.
+    public func generate(config: ShipcastConfig, artifacts: PackagedArtifacts, releaseURL: URL, resolvedMode: SignMode? = nil) -> String {
+        let effectiveMode = resolvedMode ?? config.sign.mode
+        let token = slugify(config.app.name)
         let bundleID = config.app.bundleID
         let appName = config.app.name
         let repo = config.distribute.githubRepo ?? ""
@@ -30,7 +37,7 @@ public struct CaskGenerator: Sendable {
         lines.append("  app \"\(appName).app\"")
         lines.append("")
 
-        if config.sign.mode != .developerID {
+        if effectiveMode != .developerID {
             lines.append("  postflight do")
             lines.append("    system_command \"/usr/bin/xattr\",")
             lines.append("                   args: [\"-dr\", \"com.apple.quarantine\", \"#{appdir}/\(appName).app\"]")
