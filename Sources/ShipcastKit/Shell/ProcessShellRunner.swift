@@ -5,8 +5,19 @@ public final class ProcessShellRunner: ShellRunner, @unchecked Sendable {
 
     public func run(_ command: String, args: [String], env: [String: String]?) throws -> ShellResult {
         let process = Process()
-        process.executableURL = URL(fileURLWithPath: command)
-        process.arguments = args
+
+        // If command is not an absolute path, resolve via /usr/bin/env for PATH lookup
+        let (executableURL, arguments): (URL, [String])
+        if command.hasPrefix("/") {
+            executableURL = URL(fileURLWithPath: command)
+            arguments = args
+        } else {
+            executableURL = URL(fileURLWithPath: "/usr/bin/env")
+            arguments = [command] + args
+        }
+
+        process.executableURL = executableURL
+        process.arguments = arguments
 
         if let env = env {
             var environment = ProcessInfo.processInfo.environment

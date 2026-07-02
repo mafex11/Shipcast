@@ -31,4 +31,11 @@ final class ShellRunnerTests: XCTestCase {
         let result = try runner.run("/bin/sh", args: ["-c", "exit 42"], env: [:])
         XCTAssertEqual(result.exitCode, 42)
     }
+
+    func testProcessShellRunnerResolvesBareCmdViaEnv() throws {
+        let runner = ProcessShellRunner()
+        let result = try runner.run("echo", args: ["hi"], env: nil)
+        XCTAssertEqual(result.exitCode, 0)
+        XCTAssertEqual(result.stdout.trimmingCharacters(in: .whitespacesAndNewlines), "hi")
+    }
 }
