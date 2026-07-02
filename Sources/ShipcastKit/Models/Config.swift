@@ -1,7 +1,7 @@
 import Foundation
 
-public struct ShipcastConfig: Sendable {
-    public struct App: Sendable {
+public struct ShipcastConfig: Sendable, Equatable {
+    public struct App: Sendable, Equatable {
         public var name: String
         public var bundleID: String
         public var version: String
@@ -15,13 +15,13 @@ public struct ShipcastConfig: Sendable {
         }
     }
 
-    public enum ProjectKind: Sendable {
+    public enum ProjectKind: Sendable, Equatable {
         case auto
         case swiftpm
         case xcode(project: String, scheme: String)
     }
 
-    public struct Sign: Sendable {
+    public struct Sign: Sendable, Equatable {
         public var mode: SignMode
 
         public init(mode: SignMode) {
@@ -29,7 +29,7 @@ public struct ShipcastConfig: Sendable {
         }
     }
 
-    public struct Distribute: Sendable {
+    public struct Distribute: Sendable, Equatable {
         public var githubRelease: Bool
         public var githubRepo: String?
         public var homebrewTap: String?
@@ -43,7 +43,7 @@ public struct ShipcastConfig: Sendable {
         }
     }
 
-    public struct Updates: Sendable {
+    public struct Updates: Sendable, Equatable {
         public var sparkle: Bool
         public var feed: FeedKind
 
@@ -53,7 +53,7 @@ public struct ShipcastConfig: Sendable {
         }
     }
 
-    public enum FeedKind: Sendable {
+    public enum FeedKind: Sendable, Equatable {
         case hosted
         case selfHosted(url: String)
         case none
@@ -80,18 +80,18 @@ public struct ShipcastConfig: Sendable {
     }
 }
 
-public enum SignMode: String, Sendable {
+public enum SignMode: String, Sendable, Equatable {
     case auto
     case adhoc
     case developerID = "developer-id"
 }
 
-public enum ArtifactFormat: String, Sendable {
+public enum ArtifactFormat: String, Sendable, Equatable {
     case zip
     case dmg
 }
 
-public enum TCCService: String, Sendable {
+public enum TCCService: String, Sendable, Equatable {
     case accessibility = "Accessibility"
     case screenRecording = "ScreenCapture"
     case fullDiskAccess = "SystemPolicyAllFiles"

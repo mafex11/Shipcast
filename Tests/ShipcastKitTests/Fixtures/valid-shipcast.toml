@@ -1,0 +1,22 @@
+[app]
+name = "TestApp"
+bundle_id = "dev.test.app"
+version = "1.0.0"
+project = "swiftpm"
+
+[sign]
+mode = "adhoc"
+
+[distribute]
+github_release = true
+github_repo = "test/app"
+homebrew_tap = "test/tap"
+formats = ["zip", "dmg"]
+
+[updates]
+sparkle = false
+feed = "none"
+
+[permissions]
+accessibility = true
+screen_recording = false

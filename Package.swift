@@ -28,7 +28,8 @@ let package = Package(
         ),
         .testTarget(
             name: "ShipcastKitTests",
-            dependencies: ["ShipcastKit"]
+            dependencies: ["ShipcastKit"],
+            resources: [.copy("Fixtures")]
         ),
     ]
 )
