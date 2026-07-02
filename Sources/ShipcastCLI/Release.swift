@@ -18,25 +18,31 @@ struct ReleaseCommand: ParsableCommand {
     var notes: String?
 
     func run() throws {
-        var config = try ConfigLoader.load(from: URL(fileURLWithPath: "shipcast.toml"))
-        if let feed {
-            switch feed {
-            case "hosted": config.updates.feed = .hosted
-            case "none": config.updates.feed = .none
-            case let s where s.hasPrefix("self:"): config.updates.feed = .selfHosted(url: String(s.dropFirst(5)))
-            default:
-                throw ShipcastError.config(
-                    "Unknown --feed value: \(feed)",
-                    fix: "Use --feed hosted, --feed none, or --feed self:https://example.com/appcast.xml"
-                )
-            }
-        }
-        var environment = ProcessInfo.processInfo.environment
-        if let notes { environment["SHIPCAST_NOTES"] = notes }
-
         do {
-            let pipeline = ReleasePipeline(shell: ProcessShellRunner(), environment: environment)
-            let report = try pipeline.run(config: config, at: URL(fileURLWithPath: "."), dryRun: dryRun)
+            var config = try ConfigLoader.load(from: URL(fileURLWithPath: "shipcast.toml"))
+            if let feed {
+                switch feed {
+                case "hosted": config.updates.feed = .hosted
+                case "none": config.updates.feed = .none
+                case let s where s.hasPrefix("self:"): config.updates.feed = .selfHosted(url: String(s.dropFirst(5)))
+                default:
+                    throw ShipcastError.config(
+                        "Unknown --feed value: \(feed)",
+                        fix: "Use --feed hosted, --feed none, or --feed self:https://example.com/appcast.xml"
+                    )
+                }
+            }
+            var environment = ProcessInfo.processInfo.environment
+            if let notes { environment["SHIPCAST_NOTES"] = notes }
+
+            let shell = ProcessShellRunner()
+            let root = URL(fileURLWithPath: ".")
+            // Resolve version = "auto" up front so status output shows the real version
+            // (the pipeline re-resolves internally, which is a no-op after this).
+            config = try VersionResolver.resolve(config: config, at: root, shell: shell)
+
+            let pipeline = ReleasePipeline(shell: shell, environment: environment)
+            let report = try pipeline.run(config: config, at: root, dryRun: dryRun)
             if dryRun {
                 print("── dry run: nothing published ──")
                 print("Would upload to: \(report.assetURL.absoluteString)")
@@ -49,7 +55,7 @@ struct ReleaseCommand: ParsableCommand {
                 if report.pushedToCloud { print("  Pushed to Shipcast Cloud") }
             }
         } catch let error as ShipcastError {
-            FileHandle.standardError.write(Data(error.render().utf8))
+            FileHandle.standardError.write(Data((error.render() + "\n").utf8))
             Foundation.exit(error.exitCode)
         }
     }

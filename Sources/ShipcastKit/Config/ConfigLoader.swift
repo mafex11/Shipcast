@@ -3,7 +3,17 @@ import TOMLDecoder
 
 public struct ConfigLoader {
     public static func load(from url: URL) throws -> ShipcastConfig {
-        let data = try Data(contentsOf: url)
+        let data: Data
+        do {
+            data = try Data(contentsOf: url)
+        } catch {
+            // Throw a ShipcastError so CLI do/catch blocks render Error/Fix and exit 2
+            // instead of ArgumentParser dumping a raw CocoaError with exit 1.
+            throw ShipcastError.config(
+                "Cannot read \(url.path)",
+                fix: "Run `shipcast init` to create shipcast.toml, or cd to the directory that contains it"
+            )
+        }
         let decoder = TOMLDecoder()
 
         do {

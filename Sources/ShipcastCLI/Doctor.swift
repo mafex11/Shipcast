@@ -12,7 +12,18 @@ struct DoctorCommand: ParsableCommand {
     var appPath: String?
 
     func run() throws {
-        let config = try ConfigLoader.load(from: URL(fileURLWithPath: "shipcast.toml"))
+        do {
+            try runChecked()
+        } catch let error as ShipcastError {
+            FileHandle.standardError.write(Data((error.render() + "\n").utf8))
+            Foundation.exit(error.exitCode)
+        }
+    }
+
+    private func runChecked() throws {
+        let shell = ProcessShellRunner()
+        var config = try ConfigLoader.load(from: URL(fileURLWithPath: "shipcast.toml"))
+        config = try VersionResolver.resolve(config: config, at: URL(fileURLWithPath: "."), shell: shell)
         let appURL: URL
         if let appPath {
             appURL = URL(fileURLWithPath: appPath)
@@ -35,7 +46,7 @@ struct DoctorCommand: ParsableCommand {
             }
             appURL = newest
         }
-        let findings = Doctor(shell: ProcessShellRunner()).run(appURL: appURL, config: config)
+        let findings = Doctor(shell: shell).run(appURL: appURL, config: config)
         print(DoctorRenderer.render(findings))
         Foundation.exit(DoctorRenderer.exitCode(for: findings))
     }
