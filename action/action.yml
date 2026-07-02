@@ -1,0 +1,68 @@
+name: 'Shipcast Release'
+description: 'Build, sign, notarize, and release Mac apps with Shipcast'
+inputs:
+  apple-id:
+    description: 'Apple ID email'
+    required: true
+  apple-team-id:
+    description: '10-character Apple Team ID'
+    required: true
+  apple-password:
+    description: 'App-specific password for notarization'
+    required: true
+  developer-id-p12:
+    description: 'Base64-encoded Developer ID certificate (.p12)'
+    required: true
+  p12-password:
+    description: 'Password for the P12 certificate'
+    required: true
+  sparkle-private-key:
+    description: 'Ed25519 private key for Sparkle signing'
+    required: true
+  shipcast-token:
+    description: 'Shipcast API token for hosted appcast'
+    required: true
+  github-token:
+    description: 'GitHub token for creating releases'
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Install Shipcast CLI
+      shell: bash
+      run: brew install mafex11/tap/shipcast
+
+    - name: Create temp keychain
+      shell: bash
+      run: |
+        TEMP_PW=$(uuidgen)
+        security create-keychain -p "$TEMP_PW" build.keychain
+        security default-keychain -s build.keychain
+        security unlock-keychain -p "$TEMP_PW" build.keychain
+        security set-keychain-settings -lut 21600 build.keychain
+        echo "TEMP_PW=$TEMP_PW" >> $GITHUB_ENV
+
+    - name: Import Developer ID certificate
+      shell: bash
+      run: |
+        echo "${{ inputs.developer-id-p12 }}" | base64 --decode > cert.p12
+        security import cert.p12 -k build.keychain -P "${{ inputs.p12-password }}" -T /usr/bin/codesign
+        security set-key-partition-list -S apple-tool:,apple: -s -k "$TEMP_PW" build.keychain
+
+    - name: Run Shipcast release
+      shell: bash
+      env:
+        APPLE_ID: ${{ inputs.apple-id }}
+        APPLE_TEAM_ID: ${{ inputs.apple-team-id }}
+        APPLE_APP_PASSWORD: ${{ inputs.apple-password }}
+        SPARKLE_PRIVATE_KEY: ${{ inputs.sparkle-private-key }}
+        SHIPCAST_TOKEN: ${{ inputs.shipcast-token }}
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+      run: shipcast release
+
+    - name: Cleanup
+      if: always()
+      shell: bash
+      run: |
+        security delete-keychain build.keychain || true
+        rm -f cert.p12
