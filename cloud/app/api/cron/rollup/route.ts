@@ -5,8 +5,9 @@ import { prisma } from '@/lib/prisma'
 export const dynamic = 'force-dynamic'
 
 export async function GET(req: Request) {
-  // 1. Verify CRON_SECRET header
-  const cronSecret = req.headers.get('x-cron-secret')
+  // 1. Verify CRON_SECRET. Vercel Cron invokes the route with
+  // `Authorization: Bearer $CRON_SECRET` (primary); x-cron-secret is kept
+  // as a fallback for manual/legacy invocations.
   const expectedSecret = process.env.CRON_SECRET
 
   if (!expectedSecret) {
@@ -17,7 +18,10 @@ export async function GET(req: Request) {
     )
   }
 
-  if (cronSecret !== expectedSecret) {
+  const bearerOk = req.headers.get('authorization') === `Bearer ${expectedSecret}`
+  const legacyHeaderOk = req.headers.get('x-cron-secret') === expectedSecret
+
+  if (!bearerOk && !legacyHeaderOk) {
     return NextResponse.json(
       { error: 'Unauthorized' },
       { status: 401 }

@@ -6,7 +6,7 @@ describe('GET /api/cron/rollup', () => {
   // The route handler is implemented correctly but comprehensive DB-dependent tests
   // should be added during a dedicated testing pass with proper fixtures.
 
-  it.skip('returns 401 when CRON_SECRET header is missing', async () => {
+  it.skip('returns 401 when no auth header is present', async () => {
     const req = new Request('http://localhost:3000/api/cron/rollup')
 
     const response = await GET(req)
@@ -16,7 +16,21 @@ describe('GET /api/cron/rollup', () => {
     expect(json.error).toBe('Unauthorized')
   })
 
-  it.skip('returns 401 when CRON_SECRET header is incorrect', async () => {
+  it.skip('returns 401 when Authorization bearer token is incorrect', async () => {
+    const req = new Request('http://localhost:3000/api/cron/rollup', {
+      headers: {
+        Authorization: 'Bearer wrong-secret',
+      },
+    })
+
+    const response = await GET(req)
+
+    expect(response.status).toBe(401)
+    const json = await response.json()
+    expect(json.error).toBe('Unauthorized')
+  })
+
+  it.skip('returns 401 when x-cron-secret fallback header is incorrect', async () => {
     const req = new Request('http://localhost:3000/api/cron/rollup', {
       headers: {
         'x-cron-secret': 'wrong-secret',
@@ -28,6 +42,30 @@ describe('GET /api/cron/rollup', () => {
     expect(response.status).toBe(401)
     const json = await response.json()
     expect(json.error).toBe('Unauthorized')
+  })
+
+  it.skip('accepts Vercel Cron style Authorization: Bearer <CRON_SECRET>', async () => {
+    const req = new Request('http://localhost:3000/api/cron/rollup', {
+      headers: {
+        Authorization: `Bearer ${process.env.CRON_SECRET || 'placeholder-cron-secret'}`,
+      },
+    })
+
+    const response = await GET(req)
+
+    expect(response.status).toBe(200)
+  })
+
+  it.skip('accepts legacy x-cron-secret fallback header', async () => {
+    const req = new Request('http://localhost:3000/api/cron/rollup', {
+      headers: {
+        'x-cron-secret': process.env.CRON_SECRET || 'placeholder-cron-secret',
+      },
+    })
+
+    const response = await GET(req)
+
+    expect(response.status).toBe(200)
   })
 
   it.skip('returns 500 when CRON_SECRET env var is not set', async () => {
