@@ -1,13 +1,13 @@
 import Foundation
 
 public struct Signer {
-    public static func sign(_ artifact: BuildArtifact, config: ShipcastConfig, shell: ShellRunner) throws -> SignedArtifact {
+    public static func sign(_ artifact: BuildArtifact, config: ShipcastConfig, shell: ShellRunner, environment: [String: String] = ProcessInfo.processInfo.environment) throws -> SignedArtifact {
         let resolvedMode: SignMode
         let notarized: Bool
 
         switch config.sign.mode {
         case .auto:
-            resolvedMode = try detectSignMode(shell: shell)
+            resolvedMode = try detectSignMode(shell: shell, environment: environment)
         case .adhoc:
             resolvedMode = .adhoc
         case .developerID:
@@ -23,8 +23,18 @@ public struct Signer {
             let identity = try findDeveloperIDIdentity(shell: shell)
             try DeveloperIDSigner.sign(artifact, identity: identity, shell: shell)
 
-            // Notarization check deferred to Task 10
-            notarized = false
+            // Attempt notarization if env vars present
+            let hasNotarizationEnv = environment["APPLE_ID"] != nil
+                && environment["APPLE_TEAM_ID"] != nil
+                && environment["APPLE_APP_PASSWORD"] != nil
+
+            if hasNotarizationEnv {
+                try Notarizer.notarize(artifact, shell: shell, dryRun: false, environment: environment)
+                notarized = true
+            } else {
+                print("Warning: Developer ID signed but not notarized (missing env vars)")
+                notarized = false
+            }
 
         case .auto:
             fatalError("Should be resolved by detectSignMode")
