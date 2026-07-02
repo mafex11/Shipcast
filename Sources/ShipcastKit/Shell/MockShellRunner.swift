@@ -5,6 +5,12 @@ public final class MockShellRunner: ShellRunner, @unchecked Sendable {
         public var command: String
         public var args: [String]
         public var env: [String: String]?
+
+        public init(command: String, args: [String], env: [String: String]?) {
+            self.command = command
+            self.args = args
+            self.env = env
+        }
     }
 
     private var stubs: [String: ShellResult] = [:]
