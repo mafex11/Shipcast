@@ -54,6 +54,7 @@ final class ReleasePipelineTests: XCTestCase {
         config.app.version = "1.2.0"
         config.app.project = .swiftpm
         config.sign.mode = .adhoc
+        config.distribute.githubRelease = true
         config.distribute.githubRepo = "mafex11/burnt"
         config.distribute.homebrewTap = "mafex11/homebrew-tap"
         config.distribute.formats = [.zip]
@@ -163,6 +164,118 @@ final class ReleasePipelineTests: XCTestCase {
         // Report still previews the cask and appcast
         XCTAssertTrue(report.caskPreview!.contains("cask \"burnt\""))
         XCTAssertTrue(report.appcastXML.contains("Version 1.2.0"))
+    }
+
+    func testHostedFeedMissingTokenFailsBeforeAnyShellCall() throws {
+        let shell = makeShell()
+
+        let pipeline = ReleasePipeline(
+            shell: shell,
+            environment: ["SPARKLE_PRIVATE_KEY": "b64key"] // no SHIPCAST_TOKEN
+        )
+        XCTAssertThrowsError(try pipeline.run(config: makeConfig(feed: .hosted), at: fixtureRoot, dryRun: false)) { error in
+            guard case ShipcastError.config(let message, _) = error else {
+                return XCTFail("expected .config, got \(error)")
+            }
+            XCTAssertTrue(message.contains("SHIPCAST_TOKEN"))
+        }
+        // Token validation must run before the build: no shell commands at all
+        XCTAssertTrue(shell.calls.isEmpty, "expected no shell calls, got \(shell.calls.map(\.command))")
+    }
+
+    func testSidecarWrittenBeforeCloudPushSoFailedPushIsRetryable() throws {
+        let shell = makeShell()
+
+        let buildDir = fixtureRoot.appendingPathComponent(".build/release")
+        try FileManager.default.createDirectory(at: buildDir, withIntermediateDirectories: true)
+        try Data("mock binary".utf8).write(to: buildDir.appendingPathComponent("Burnt"))
+        defer {
+            try? FileManager.default.removeItem(at: fixtureRoot.appendingPathComponent(".build"))
+            try? FileManager.default.removeItem(at: fixtureRoot.appendingPathComponent(".shipcast"))
+        }
+
+        let pipeline = ReleasePipeline(
+            shell: shell,
+            environment: ["SPARKLE_PRIVATE_KEY": "b64key", "SHIPCAST_TOKEN": "sct_secret"],
+            cloudPush: { _, _, _ in
+                throw ShipcastError.publish("cloud push exploded", fix: "retry with shipcast push")
+            }
+        )
+        XCTAssertThrowsError(try pipeline.run(config: makeConfig(feed: .hosted), at: fixtureRoot, dryRun: false)) { error in
+            XCTAssertEqual((error as? ShipcastError)?.exitCode, 5)
+        }
+
+        // Sidecar must exist on disk even though the push failed
+        let sidecarURL = fixtureRoot.appendingPathComponent(".shipcast/last-release.json")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: sidecarURL.path))
+        let meta = try JSONDecoder().decode(LastReleaseMetadata.self, from: Data(contentsOf: sidecarURL))
+        XCTAssertEqual(meta.version, "1.2.0")
+    }
+
+    func testAutoVersionResolvedFromGitTag() throws {
+        let shell = makeShell()
+        shell.stub(command: "git", args: ["-C", fixtureRoot.path, "describe", "--tags", "--abbrev=0"],
+                   result: ShellResult(exitCode: 0, stdout: "v2.1.0\n", stderr: ""))
+
+        let buildDir = fixtureRoot.appendingPathComponent(".build/release")
+        try FileManager.default.createDirectory(at: buildDir, withIntermediateDirectories: true)
+        try Data("mock binary".utf8).write(to: buildDir.appendingPathComponent("Burnt"))
+        defer { try? FileManager.default.removeItem(at: fixtureRoot.appendingPathComponent(".build")) }
+
+        var config = makeConfig(feed: .none)
+        config.app.version = "auto"
+        config.updates.sparkle = false
+        let pipeline = ReleasePipeline(shell: shell, environment: [:])
+        let report = try pipeline.run(config: config, at: fixtureRoot, dryRun: true)
+
+        XCTAssertEqual(report.assetURL.absoluteString,
+                       "https://github.com/mafex11/burnt/releases/download/v2.1.0/Burnt.zip")
+        XCTAssertTrue(report.caskPreview!.contains("version \"2.1.0\""))
+        XCTAssertFalse(report.caskPreview!.contains("vauto"))
+    }
+
+    func testGitHubReleaseFalseSkipsPublishAndUsesPredictedURL() throws {
+        let shell = makeShell()
+
+        let buildDir = fixtureRoot.appendingPathComponent(".build/release")
+        try FileManager.default.createDirectory(at: buildDir, withIntermediateDirectories: true)
+        try Data("mock binary".utf8).write(to: buildDir.appendingPathComponent("Burnt"))
+        defer {
+            try? FileManager.default.removeItem(at: fixtureRoot.appendingPathComponent(".build"))
+            try? FileManager.default.removeItem(at: fixtureRoot.appendingPathComponent(".shipcast"))
+        }
+
+        var config = makeConfig(feed: .selfHosted(url: "https://example.com/appcast.xml"))
+        config.distribute.githubRelease = false
+        config.distribute.homebrewTap = nil
+        let pipeline = ReleasePipeline(shell: shell, environment: ["SPARKLE_PRIVATE_KEY": "b64key"])
+        let report = try pipeline.run(config: config, at: fixtureRoot, dryRun: false)
+
+        // No gh release create, but the predicted URL (githubRepo is set) is used
+        XCTAssertFalse(shell.calls.contains { $0.command == "gh" && $0.args.first == "release" })
+        XCTAssertEqual(report.assetURL.absoluteString,
+                       "https://github.com/mafex11/burnt/releases/download/v1.2.0/Burnt.zip")
+    }
+
+    func testGitHubReleaseFalseWithoutRepoButFeedNeedsURLThrowsConfig() throws {
+        let shell = makeShell()
+
+        let buildDir = fixtureRoot.appendingPathComponent(".build/release")
+        try FileManager.default.createDirectory(at: buildDir, withIntermediateDirectories: true)
+        try Data("mock binary".utf8).write(to: buildDir.appendingPathComponent("Burnt"))
+        defer { try? FileManager.default.removeItem(at: fixtureRoot.appendingPathComponent(".build")) }
+
+        var config = makeConfig(feed: .selfHosted(url: "https://example.com/appcast.xml"))
+        config.distribute.githubRelease = false
+        config.distribute.githubRepo = nil
+        config.distribute.homebrewTap = nil
+        let pipeline = ReleasePipeline(shell: shell, environment: ["SPARKLE_PRIVATE_KEY": "b64key"])
+        XCTAssertThrowsError(try pipeline.run(config: config, at: fixtureRoot, dryRun: false)) { error in
+            guard case ShipcastError.config(let message, _) = error else {
+                return XCTFail("expected .config, got \(error)")
+            }
+            XCTAssertTrue(message.contains("github_release = false"))
+        }
     }
 
     func testPublishFailurePropagatesExitCode5() throws {
