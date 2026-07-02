@@ -1,0 +1,1 @@
+// ShipcastKit library placeholder
